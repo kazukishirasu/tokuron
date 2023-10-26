@@ -4,4 +4,4 @@ catkin build
 source ~/.bashrc  
 cd tokuron/models  
 mkdir ~/.gazebo/models/tokuron  
-cp cp -r meshes/ model.* ~/.gazebo/models/tokuron/  
+cp -r meshes/ model.* ~/.gazebo/models/tokuron/  
