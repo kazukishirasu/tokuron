@@ -5,6 +5,17 @@
 #include <geometry_msgs/PoseStamped.h>
 #include "ros/package.h"
 
+struct Point {
+    double x;
+    double y;
+    double z;
+};
+
+struct Spot {
+    std::string name;
+    Point point;
+};
+
 class Navigation{
     private:
         ros::NodeHandle nh;
@@ -33,8 +44,25 @@ void Navigation::read_yaml(){
     std::string pkg_path = ros::package::getPath("tokuron");
     std::string yaml_path = "/spot/spot.yaml";
     pkg_path += yaml_path;
+    YAML::Node config = YAML::LoadFile(pkg_path);
     ROS_INFO("%s", pkg_path.c_str());
-    
+    try {
+        const YAML::Node& spots = config["spots"];
+        for (const auto& spotNode : spots){
+            Spot spot;
+            spot.name = spotNode["name"].as<std::string>();
+
+            const YAML::Node& pointNode = spotNode["point"];
+            spot.point.x = pointNode["x"].as<double>();
+            spot.point.y = pointNode["y"].as<double>();
+            spot.point.z = pointNode["z"].as<double>();
+
+            std::cout << "Spot: " << spot.name << std::endl;
+            std::cout << "  - Point: (" << spot.point.x << ", " << spot.point.y << ", " << spot.point.z << ")\n";
+        }
+    } catch (const std::exception& e) {
+        std::cerr << "Error reading YAML file: " << e.what() << std::endl;
+    }
 }
 
 void Navigation::send_goal(double px, double py, double pz, double ow){
