@@ -7,7 +7,21 @@ project(tokuron)
 ## Find catkin macros and libraries
 ## if COMPONENTS list like find_package(catkin REQUIRED COMPONENTS xyz)
 ## is used, also find other catkin packages
-find_package(catkin REQUIRED)
+find_package(catkin REQUIRED COMPONENTS
+  roscpp
+  std_msgs
+)
+catkin_package(
+  CATKIN_DEPENDS roscpp std_msgs
+)
+include_directories(
+  ${catkin_INCLUDE_DIRS}
+)
+add_executable(navigation src/navigation.cpp)
+target_link_libraries(
+  navigation
+  ${catkin_LIBRARIES}
+)
 
 ## System dependencies are found with CMake's conventions
 # find_package(Boost REQUIRED COMPONENTS system)
