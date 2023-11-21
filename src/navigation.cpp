@@ -4,15 +4,18 @@
 #include <std_msgs/String.h>
 #include <std_msgs/UInt8MultiArray.h>
 #include <geometry_msgs/PoseStamped.h>
+#include <geometry_msgs/PoseWithCovarianceStamped.h>
 
 class Navigation{
     private:
         ros::NodeHandle nh;
         ros::Publisher goal_pub;
-        ros::Subscriber list_sub;
+        ros::Subscriber pose_sub,
+                        list_sub;
     public:
         Navigation();
         void loop();
+        void pose_callback(const geometry_msgs::PoseWithCovarianceStamped& msg);
         void list_callback(const std_msgs::UInt8MultiArray& msg);
         void read_yaml();
         void send_goal(double px, double py, double pz, double ow);
@@ -30,14 +33,24 @@ struct Spot {
 };
 
 Navigation::Navigation(){
+    ROS_INFO("start navigation node");
+    read_yaml();
+    ROS_INFO("read yaml");
     list_sub = nh.subscribe("/list", 1, &Navigation::list_callback, this);
+    pose_sub = nh.subscribe("/amcl_pose", 1, &Navigation::pose_callback, this);
 }
 
 void Navigation::loop(){
-    read_yaml();
-    ROS_INFO("read yaml");
     send_goal(-0.6, 0.725, 0, 1);
     ROS_INFO("send goal");
+}
+
+void Navigation::pose_callback(const geometry_msgs::PoseWithCovarianceStamped& msg){
+    double x, y, z;
+    x = msg.pose.pose.position.x;
+    y = msg.pose.pose.position.y;
+    z = msg.pose.pose.position.z;
+    ROS_INFO("x = %f, y = %f, z = %f", x, y, z);
 }
 
 void Navigation::list_callback(const std_msgs::UInt8MultiArray& msg){
@@ -95,7 +108,6 @@ void Navigation::send_goal(double px, double py, double pz, double ow){
 int main(int argc, char **argv) {
     ros::init(argc, argv, "navigation");
     Navigation navigation;
-    ROS_INFO("start navigation node");
     ros::Rate rate(10);
     while (ros::ok()){
         navigation.loop();
