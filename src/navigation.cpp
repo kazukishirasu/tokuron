@@ -6,6 +6,7 @@
 #include <std_msgs/UInt8MultiArray.h>
 #include <geometry_msgs/PoseStamped.h>
 #include <geometry_msgs/PoseWithCovarianceStamped.h>
+#include <tf/transform_broadcaster.h>
 
 
 class Navigation{
@@ -43,6 +44,18 @@ Navigation::Navigation(){
     ROS_INFO("read yaml");
     list_sub = nh.subscribe("/list", 1, &Navigation::list_callback, this);
     pose_sub = nh.subscribe("/amcl_pose", 1, &Navigation::pose_callback, this);
+}
+
+void Navigation::loop(){
+    if (get_list){
+        double  x = vec_spot[list_msg.data[0]].point.x,
+                y = vec_spot[list_msg.data[0]].point.y,
+                z = vec_spot[list_msg.data[0]].point.z;
+        send_goal(x, y, z);
+        ROS_INFO("send goal");
+    }else{
+        ROS_INFO("waiting for message");
+    }
 }
 
 void Navigation::pose_callback(const geometry_msgs::PoseWithCovarianceStamped& msg){
@@ -92,7 +105,7 @@ void Navigation::read_yaml(){
     }
 }
 
-void Navigation::send_goal(double x, double y, double w){
+void Navigation::send_goal(double x, double y, double e){
     goal_pub = nh.advertise<geometry_msgs::PoseStamped>("move_base_simple/goal", 1);
  
     ros::Rate one_sec(1);
@@ -100,27 +113,20 @@ void Navigation::send_goal(double x, double y, double w){
      
     ros::Time time = ros::Time::now();
     geometry_msgs::PoseStamped goal_point;
+
+    tf::Quaternion orientation=tf::createQuaternionFromRPY(0, 0, e);
  
     goal_point.pose.position.x = x;
     goal_point.pose.position.y = y;
     goal_point.pose.position.z =  0;
-    goal_point.pose.orientation.w = w;
+    goal_point.pose.orientation.x = orientation[0];
+    goal_point.pose.orientation.y = orientation[1];
+    goal_point.pose.orientation.z = orientation[2];
+    goal_point.pose.orientation.w = orientation[3];
     goal_point.header.stamp = time;
     goal_point.header.frame_id = "map";
  
     goal_pub.publish(goal_point);
-}
-
-void Navigation::loop(){
-    if (get_list){
-        double  x = vec_spot[list_msg.data[0]].point.x,
-                y = vec_spot[list_msg.data[0]].point.y,
-                z = vec_spot[list_msg.data[0]].point.z;
-        send_goal(x, y, z);
-        ROS_INFO("send goal");
-    }else{
-        ROS_INFO("waiting for message");
-    }
 }
 
 int main(int argc, char **argv) {

@@ -4,22 +4,22 @@ spot:
     point:
       x: -0.6
       y: 0.725
-      z: 1.0
+      z: 2.355
   - num: 2
     name: hospital
     point:
       x: 0.65
       y: -0.275
-      z: 1.0
+      z: 0.0
   - num: 3
     name: cafe
     point:
       x: -0.6
       y: 0.2
-      z: 1.0
+      z: 3.14
   - num: 4
     name: library
     point:
       x: 0.75
       y: 0.7
-      z: 1.0
+      z: 0.785
