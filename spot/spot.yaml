@@ -1,21 +1,25 @@
 spot:
-  - name: sea
+  - num: 1
+    name: sea
     point:
       x: -0.6
       y: 0.725
-      z: 0.0
-  - name: hospital
+      z: 1.0
+  - num: 2
+    name: hospital
     point:
       x: 0.65
       y: -0.275
-      z: 0.0
-  - name: cafe
+      z: 1.0
+  - num: 3
+    name: cafe
     point:
       x: -0.6
       y: 0.2
-      z: 0.0
-  - name: library
+      z: 1.0
+  - num: 4
+    name: library
     point:
       x: 0.75
       y: 0.7
-      z: 0.0
+      z: 1.0

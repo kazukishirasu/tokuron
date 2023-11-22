@@ -1,10 +1,12 @@
 #include <ros/ros.h>
 #include "ros/package.h"
 #include "yaml-cpp/yaml.h"
+#include <vector>
 #include <std_msgs/String.h>
 #include <std_msgs/UInt8MultiArray.h>
 #include <geometry_msgs/PoseStamped.h>
 #include <geometry_msgs/PoseWithCovarianceStamped.h>
+
 
 class Navigation{
     private:
@@ -12,24 +14,27 @@ class Navigation{
         ros::Publisher goal_pub;
         ros::Subscriber pose_sub,
                         list_sub;
+        struct Point {
+            double x;
+            double y;
+            double z;
+        };
+        struct Spot {
+            uint8_t num;
+            std::string name;
+            Point point;
+        };
+        std_msgs::UInt8MultiArray list_msg;
+        std::vector<Spot> vec_spot;
+        bool get_list = false;
+
     public:
         Navigation();
         void loop();
         void pose_callback(const geometry_msgs::PoseWithCovarianceStamped& msg);
         void list_callback(const std_msgs::UInt8MultiArray& msg);
         void read_yaml();
-        void send_goal(double px, double py, double pz, double ow);
-};
-
-struct Point {
-    double x;
-    double y;
-    double z;
-};
-
-struct Spot {
-    std::string name;
-    Point point;
+        void send_goal(double, double, double);
 };
 
 Navigation::Navigation(){
@@ -38,11 +43,6 @@ Navigation::Navigation(){
     ROS_INFO("read yaml");
     list_sub = nh.subscribe("/list", 1, &Navigation::list_callback, this);
     pose_sub = nh.subscribe("/amcl_pose", 1, &Navigation::pose_callback, this);
-}
-
-void Navigation::loop(){
-    send_goal(-0.6, 0.725, 0, 1);
-    ROS_INFO("send goal");
 }
 
 void Navigation::pose_callback(const geometry_msgs::PoseWithCovarianceStamped& msg){
@@ -54,11 +54,13 @@ void Navigation::pose_callback(const geometry_msgs::PoseWithCovarianceStamped& m
 }
 
 void Navigation::list_callback(const std_msgs::UInt8MultiArray& msg){
-    int num = msg.data.size();
-    ROS_INFO("I subscribed [%i]", num);
-    for (int i = 0; i < num; i++){
+    int sum = msg.data.size();
+    ROS_INFO("I subscribed [%i]", sum);
+    for (int i = 0; i < sum; i++){
         ROS_INFO("[%i]:%d", i, msg.data[i]);
     }
+    list_msg = msg;
+    get_list = true;
 }
 
 void Navigation::read_yaml(){
@@ -71,6 +73,7 @@ void Navigation::read_yaml(){
         const YAML::Node& spots = config["spot"];
         for (const auto& spotNode : spots){
             Spot spot;
+            spot.num = spotNode["num"].as<uint8_t>();
             spot.name = spotNode["name"].as<std::string>();
 
             const YAML::Node& pointNode = spotNode["point"];
@@ -78,6 +81,9 @@ void Navigation::read_yaml(){
             spot.point.y = pointNode["y"].as<double>();
             spot.point.z = pointNode["z"].as<double>();
 
+            vec_spot.push_back(spot);
+
+            std::cout << "Num: " << spot.num << std::endl;
             std::cout << "Spot: " << spot.name << std::endl;
             std::cout << "  - Point: (" << spot.point.x << ", " << spot.point.y << ", " << spot.point.z << ")\n";
         }
@@ -86,7 +92,7 @@ void Navigation::read_yaml(){
     }
 }
 
-void Navigation::send_goal(double px, double py, double pz, double ow){
+void Navigation::send_goal(double x, double y, double w){
     goal_pub = nh.advertise<geometry_msgs::PoseStamped>("move_base_simple/goal", 1);
  
     ros::Rate one_sec(1);
@@ -95,14 +101,26 @@ void Navigation::send_goal(double px, double py, double pz, double ow){
     ros::Time time = ros::Time::now();
     geometry_msgs::PoseStamped goal_point;
  
-    goal_point.pose.position.x = px;
-    goal_point.pose.position.y = py;
-    goal_point.pose.position.z =  pz;
-    goal_point.pose.orientation.w = ow;
+    goal_point.pose.position.x = x;
+    goal_point.pose.position.y = y;
+    goal_point.pose.position.z =  0;
+    goal_point.pose.orientation.w = w;
     goal_point.header.stamp = time;
     goal_point.header.frame_id = "map";
  
     goal_pub.publish(goal_point);
+}
+
+void Navigation::loop(){
+    if (get_list){
+        double  x = vec_spot[list_msg.data[0]].point.x,
+                y = vec_spot[list_msg.data[0]].point.y,
+                z = vec_spot[list_msg.data[0]].point.z;
+        send_goal(x, y, z);
+        ROS_INFO("send goal");
+    }else{
+        ROS_INFO("waiting for message");
+    }
 }
 
 int main(int argc, char **argv) {
