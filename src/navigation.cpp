@@ -1,6 +1,7 @@
 #include <ros/ros.h>
-#include "ros/package.h"
-#include "yaml-cpp/yaml.h"
+#include <ros/package.h>
+#include <math.h>
+#include <yaml-cpp/yaml.h>
 #include <vector>
 #include <std_msgs/String.h>
 #include <std_msgs/UInt8MultiArray.h>
@@ -8,11 +9,11 @@
 #include <geometry_msgs/PoseWithCovarianceStamped.h>
 #include <tf/transform_broadcaster.h>
 
-
 class Navigation{
     private:
         ros::NodeHandle nh;
-        ros::Publisher goal_pub;
+        ros::Publisher  goal_pub,
+                        vel_pub;
         ros::Subscriber pose_sub,
                         list_sub;
         struct Point {
@@ -25,9 +26,10 @@ class Navigation{
             std::string name;
             Point point;
         };
-        std_msgs::UInt8MultiArray list_msg;
         std::vector<Spot> vec_spot;
-        bool get_list = false;
+        std::vector<int> vec_array_msg;
+        double px, py, pz;
+        bool first_msg = false;
 
     public:
         Navigation();
@@ -36,6 +38,8 @@ class Navigation{
         void list_callback(const std_msgs::UInt8MultiArray& msg);
         void read_yaml();
         void send_goal(double, double, double);
+        double check_distance(double, double, double, double);
+        void stop_vel(double);
 };
 
 Navigation::Navigation(){
@@ -43,37 +47,39 @@ Navigation::Navigation(){
     read_yaml();
     ROS_INFO("read yaml");
     list_sub = nh.subscribe("/list", 1, &Navigation::list_callback, this);
-    pose_sub = nh.subscribe("/amcl_pose", 1, &Navigation::pose_callback, this);
-}
-
-void Navigation::loop(){
-    if (get_list){
-        double  x = vec_spot[list_msg.data[0]].point.x,
-                y = vec_spot[list_msg.data[0]].point.y,
-                z = vec_spot[list_msg.data[0]].point.z;
-        send_goal(x, y, z);
-        ROS_INFO("send goal");
-    }else{
-        ROS_INFO("waiting for message");
-    }
+    pose_sub = nh.subscribe("/mcl_pose", 1, &Navigation::pose_callback, this);
 }
 
 void Navigation::pose_callback(const geometry_msgs::PoseWithCovarianceStamped& msg){
-    double x, y, z;
-    x = msg.pose.pose.position.x;
-    y = msg.pose.pose.position.y;
-    z = msg.pose.pose.position.z;
-    ROS_INFO("x = %f, y = %f, z = %f", x, y, z);
+    px = msg.pose.pose.position.x;
+    py = msg.pose.pose.position.y;
+    pz = msg.pose.pose.position.z;
+    // ROS_INFO("x = %f, y = %f, z = %f", px, py, pz);
 }
 
 void Navigation::list_callback(const std_msgs::UInt8MultiArray& msg){
+    vec_array_msg.clear();
     int sum = msg.data.size();
     ROS_INFO("I subscribed [%i]", sum);
     for (int i = 0; i < sum; i++){
+        vec_array_msg.push_back(msg.data[i]);
         ROS_INFO("[%i]:%d", i, msg.data[i]);
     }
-    list_msg = msg;
-    get_list = true;
+    first_msg = true;
+}
+
+void Navigation::loop(){
+    if (first_msg){
+        double  gx = vec_spot[vec_array_msg[0]].point.x,
+                gy = vec_spot[vec_array_msg[0]].point.y,
+                gz = vec_spot[vec_array_msg[0]].point.z,
+                d;
+        send_goal(gx, gy, gz);
+        d = check_distance(gx, gy, px, py);
+        stop_vel(d);
+    }else{
+        ROS_INFO("waiting for first message");
+    }
 }
 
 void Navigation::read_yaml(){
@@ -106,7 +112,7 @@ void Navigation::read_yaml(){
 }
 
 void Navigation::send_goal(double x, double y, double e){
-    goal_pub = nh.advertise<geometry_msgs::PoseStamped>("move_base_simple/goal", 1);
+    goal_pub = nh.advertise<geometry_msgs::PoseStamped>("/move_base_simple/goal", 1);
  
     ros::Rate one_sec(1);
     one_sec.sleep();
@@ -127,6 +133,25 @@ void Navigation::send_goal(double x, double y, double e){
     goal_point.header.frame_id = "map";
  
     goal_pub.publish(goal_point);
+    ROS_INFO("send goal");
+}
+
+double Navigation::check_distance(double gx, double gy, double px, double py){
+    double distance;
+    distance = sqrt(std::pow(px-gx, 2) + std::pow(py-gy, 2));
+    ROS_INFO("distance : %f", distance);
+    return distance;
+}
+
+void Navigation::stop_vel(double d){
+    vel_pub = nh.advertise<geometry_msgs::Twist>("/cmd_vel", 1);
+    geometry_msgs::Twist vel;
+    if (d < 0.05){
+        vel.linear.x = 0;
+        vel.angular.z = 0;
+        vel_pub.publish(vel);
+        ROS_INFO("stop");
+    }
 }
 
 int main(int argc, char **argv) {
