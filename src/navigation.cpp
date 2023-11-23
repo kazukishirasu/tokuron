@@ -8,6 +8,7 @@
 #include <geometry_msgs/PoseStamped.h>
 #include <geometry_msgs/PoseWithCovarianceStamped.h>
 #include <tf/transform_broadcaster.h>
+#include <unistd.h>
 
 class Navigation{
     private:
@@ -29,7 +30,8 @@ class Navigation{
         std::vector<Spot> vec_spot;
         std::vector<int> vec_array_msg;
         double px, py, pz;
-        bool first_msg = false;
+        bool get_msg = false,
+             reach_goal = false;
 
     public:
         Navigation();
@@ -38,14 +40,13 @@ class Navigation{
         void list_callback(const std_msgs::UInt8MultiArray& msg);
         void read_yaml();
         void send_goal(double, double, double);
-        double check_distance(double, double, double, double);
-        void stop_vel(double);
+        void check_distance(double, double, double, double);
+        void stop_vel();
 };
 
 Navigation::Navigation(){
     ROS_INFO("start navigation node");
     read_yaml();
-    ROS_INFO("read yaml");
     list_sub = nh.subscribe("/list", 1, &Navigation::list_callback, this);
     pose_sub = nh.subscribe("/mcl_pose", 1, &Navigation::pose_callback, this);
 }
@@ -65,20 +66,29 @@ void Navigation::list_callback(const std_msgs::UInt8MultiArray& msg){
         vec_array_msg.push_back(msg.data[i]);
         ROS_INFO("[%i]:%d", i, msg.data[i]);
     }
-    first_msg = true;
+    get_msg = true;
 }
 
 void Navigation::loop(){
-    if (first_msg){
-        double  gx = vec_spot[vec_array_msg[0]].point.x,
-                gy = vec_spot[vec_array_msg[0]].point.y,
-                gz = vec_spot[vec_array_msg[0]].point.z,
+    static int spot_num = 0;
+    if (reach_goal){
+        stop_vel();
+        spot_num++;
+    }else if (get_msg){
+        double  gx = vec_spot[vec_array_msg[spot_num]].point.x,
+                gy = vec_spot[vec_array_msg[spot_num]].point.y,
+                gz = vec_spot[vec_array_msg[spot_num]].point.z,
                 d;
-        send_goal(gx, gy, gz);
-        d = check_distance(gx, gy, px, py);
-        stop_vel(d);
+        if (spot_num > vec_array_msg.size()){
+        }else if (spot_num == vec_array_msg.size()){
+            send_goal(0.0, -0.7, -1.57);
+            check_distance(0.0, -0.7, px, py);
+        }else{
+            send_goal(gx, gy, gz);
+            check_distance(gx, gy, px, py);
+        }
     }else{
-        ROS_INFO("waiting for first message");
+        ROS_INFO("waiting for message");
     }
 }
 
@@ -106,6 +116,7 @@ void Navigation::read_yaml(){
             std::cout << "Spot: " << spot.name << std::endl;
             std::cout << "  - Point: (" << spot.point.x << ", " << spot.point.y << ", " << spot.point.z << ")\n";
         }
+        ROS_INFO("read yaml");
     } catch (const std::exception& e) {
         std::cerr << "Error reading YAML file: " << e.what() << std::endl;
     }
@@ -136,22 +147,25 @@ void Navigation::send_goal(double x, double y, double e){
     ROS_INFO("send goal");
 }
 
-double Navigation::check_distance(double gx, double gy, double px, double py){
+void Navigation::check_distance(double gx, double gy, double px, double py){
     double distance;
     distance = sqrt(std::pow(px-gx, 2) + std::pow(py-gy, 2));
     ROS_INFO("distance : %f", distance);
-    return distance;
+    if (distance < 0.05){
+        reach_goal = true;
+    }
 }
 
-void Navigation::stop_vel(double d){
+void Navigation::stop_vel(){
     vel_pub = nh.advertise<geometry_msgs::Twist>("/cmd_vel", 1);
     geometry_msgs::Twist vel;
-    if (d < 0.05){
-        vel.linear.x = 0;
-        vel.angular.z = 0;
-        vel_pub.publish(vel);
-        ROS_INFO("stop");
-    }
+    vel.linear.x = 0;
+    vel.angular.z = 0;
+    vel_pub.publish(vel);
+    ROS_INFO("reached to goal");
+    reach_goal = false;
+    get_msg = true;
+    sleep(2);
 }
 
 int main(int argc, char **argv) {
