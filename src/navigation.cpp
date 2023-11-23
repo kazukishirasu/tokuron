@@ -71,15 +71,14 @@ void Navigation::list_callback(const std_msgs::UInt8MultiArray& msg){
 
 void Navigation::loop(){
     static int spot_num = 0;
-    if (reach_goal){
-        stop_vel();
-        spot_num++;
-    }else if (get_msg){
+    if (get_msg && spot_num <= vec_array_msg.size()){
         double  gx = vec_spot[vec_array_msg[spot_num]].point.x,
                 gy = vec_spot[vec_array_msg[spot_num]].point.y,
                 gz = vec_spot[vec_array_msg[spot_num]].point.z,
                 d;
-        if (spot_num > vec_array_msg.size()){
+        if (reach_goal){
+            stop_vel();
+            spot_num++;
         }else if (spot_num == vec_array_msg.size()){
             send_goal(0.0, -0.7, -1.57);
             check_distance(0.0, -0.7, px, py);
