@@ -43,6 +43,7 @@ class Navigation{
         void list_callback(const std_msgs::UInt8MultiArray& msg);
         void empty_goal_callback();
         void read_yaml();
+        // void send_goal(double, double, double);
         void send_goal(double, double, double);
         double check_distance(double, double, double, double);
 };
@@ -85,6 +86,7 @@ void Navigation::list_callback(const std_msgs::UInt8MultiArray& msg){
         vec_array_msg.push_back(msg.data[i]);
         ROS_INFO("[%i]:%d", i, msg.data[i]);
     }
+    vec_array_msg.push_back(0);
 }
 
 void Navigation::empty_goal_callback(){
@@ -92,23 +94,19 @@ void Navigation::empty_goal_callback(){
     actionlib_msgs::GoalID empty;
     empty.id = "";
     empty_goal_pub.publish(empty);
+    ROS_INFO("publish empty goal");
 }
 
 void Navigation::loop(){
     if (mode){
         static int spot_num = 0;
-        double d;
-        if (spot_num < vec_array_msg.size()){
-            double  gx = vec_spot[vec_array_msg[spot_num]].point.x,
-                    gy = vec_spot[vec_array_msg[spot_num]].point.y,
-                    gz = vec_spot[vec_array_msg[spot_num]].point.z;
-            send_goal(gx, gy, gz);
-            d = check_distance(gx, gy, px, py);
-        }else if (spot_num == vec_array_msg.size()){
-            send_goal(0.0, -0.7, -1.57);
-            d = check_distance(0.0, -0.7, px, py);
-        }
-        if (d < 0.05){
+        double dist;
+        double  gx = vec_spot[vec_array_msg[spot_num]].point.x,
+                gy = vec_spot[vec_array_msg[spot_num]].point.y,
+                gz = vec_spot[vec_array_msg[spot_num]].point.z;
+        send_goal(gx, gy, gz);
+        dist = check_distance(gx, gy, px, py);
+        if (dist < 0.05){
                 spot_num++;
                 mode = false;
                 empty_goal_callback();
