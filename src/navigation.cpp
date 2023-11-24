@@ -3,6 +3,7 @@
 #include <ros/package.h>
 #include <yaml-cpp/yaml.h>
 #include <vector>
+#include <unistd.h>
 #include <std_msgs/String.h>
 #include <std_msgs/UInt8MultiArray.h>
 #include <geometry_msgs/PoseStamped.h>
@@ -89,6 +90,7 @@ void Navigation::list_callback(const std_msgs::UInt8MultiArray& msg){
 }
 
 void Navigation::empty_goal_callback(){
+    sleep(1);
     empty_goal_pub = nh.advertise<actionlib_msgs::GoalID>("/move_base/cancel", 1);
     actionlib_msgs::GoalID empty;
     empty.id = "";
