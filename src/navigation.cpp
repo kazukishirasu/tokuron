@@ -43,9 +43,8 @@ class Navigation{
         void list_callback(const std_msgs::UInt8MultiArray& msg);
         void empty_goal_callback();
         void read_yaml();
-        // void send_goal(double, double, double);
-        void send_goal(double, double, double);
-        double check_distance(double, double, double, double);
+        void send_goal(double*, double*, double*);
+        double check_distance(double*, double*, double*, double*);
 };
 
 Navigation::Navigation(){
@@ -100,12 +99,14 @@ void Navigation::empty_goal_callback(){
 void Navigation::loop(){
     if (mode){
         static int spot_num = 0;
-        double dist;
-        double  gx = vec_spot[vec_array_msg[spot_num]].point.x,
-                gy = vec_spot[vec_array_msg[spot_num]].point.y,
-                gz = vec_spot[vec_array_msg[spot_num]].point.z;
+        double  *gx = &vec_spot[vec_array_msg[spot_num]].point.x,
+                *gy = &vec_spot[vec_array_msg[spot_num]].point.y,
+                *gz = &vec_spot[vec_array_msg[spot_num]].point.z,
+                *ppx = &px,
+                *ppy = &py, 
+                dist;
         send_goal(gx, gy, gz);
-        dist = check_distance(gx, gy, px, py);
+        dist = check_distance(gx, gy, ppx, ppy);
         if (dist < 0.05){
                 spot_num++;
                 mode = false;
@@ -146,7 +147,7 @@ void Navigation::read_yaml(){
     }
 }
 
-void Navigation::send_goal(double x, double y, double e){
+void Navigation::send_goal(double *x, double *y, double *e){
     goal_pub = nh.advertise<geometry_msgs::PoseStamped>("/move_base_simple/goal", 1);
  
     ros::Rate one_sec(1);
@@ -155,10 +156,10 @@ void Navigation::send_goal(double x, double y, double e){
     ros::Time time = ros::Time::now();
     geometry_msgs::PoseStamped goal_point;
 
-    tf::Quaternion orientation=tf::createQuaternionFromRPY(0, 0, e);
+    tf::Quaternion orientation=tf::createQuaternionFromRPY(0, 0, *e);
  
-    goal_point.pose.position.x = x;
-    goal_point.pose.position.y = y;
+    goal_point.pose.position.x = *x;
+    goal_point.pose.position.y = *y;
     goal_point.pose.position.z =  0;
     goal_point.pose.orientation.x = orientation[0];
     goal_point.pose.orientation.y = orientation[1];
@@ -171,9 +172,9 @@ void Navigation::send_goal(double x, double y, double e){
     ROS_INFO("send goal");
 }
 
-double Navigation::check_distance(double gx, double gy, double px, double py){
+double Navigation::check_distance(double *gx, double *gy, double *px, double *py){
     double distance;
-    distance = sqrt(std::pow(px-gx, 2) + std::pow(py-gy, 2));
+    distance = sqrt(std::pow(*px - *gx, 2) + std::pow(*py - *gy, 2));
     ROS_INFO("distance:%f", distance);
     return distance;
 }
