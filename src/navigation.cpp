@@ -1,22 +1,25 @@
 #include <ros/ros.h>
-#include <ros/package.h>
 #include <math.h>
+#include <ros/package.h>
 #include <yaml-cpp/yaml.h>
 #include <vector>
 #include <std_msgs/String.h>
 #include <std_msgs/UInt8MultiArray.h>
 #include <geometry_msgs/PoseStamped.h>
 #include <geometry_msgs/PoseWithCovarianceStamped.h>
+#include <actionlib_msgs/GoalID.h>
 #include <tf/transform_broadcaster.h>
-#include <unistd.h>
+#include <std_srvs/SetBool.h>
 
 class Navigation{
     private:
         ros::NodeHandle nh;
         ros::Publisher  goal_pub,
-                        vel_pub;
+                        vel_pub,
+                        empty_goal_pub;
         ros::Subscriber pose_sub,
                         list_sub;
+        ros::ServiceServer srv;
         struct Point {
             double x;
             double y;
@@ -30,32 +33,48 @@ class Navigation{
         std::vector<Spot> vec_spot;
         std::vector<int> vec_array_msg;
         double px, py, pz;
-        bool get_msg = false,
-             reach_goal = false;
+        bool mode = false;
 
     public:
         Navigation();
         void loop();
+        bool mode_callback(std_srvs::SetBool::Request &req, std_srvs::SetBool::Response &res);
         void pose_callback(const geometry_msgs::PoseWithCovarianceStamped& msg);
         void list_callback(const std_msgs::UInt8MultiArray& msg);
+        void empty_goal_callback();
         void read_yaml();
         void send_goal(double, double, double);
-        void check_distance(double, double, double, double);
-        void stop_vel();
+        double check_distance(double, double, double, double);
 };
 
 Navigation::Navigation(){
     ROS_INFO("start navigation node");
     read_yaml();
+    srv = nh.advertiseService("/mode", &Navigation::mode_callback, this);
     list_sub = nh.subscribe("/list", 1, &Navigation::list_callback, this);
     pose_sub = nh.subscribe("/mcl_pose", 1, &Navigation::pose_callback, this);
+}
+
+bool Navigation::mode_callback(std_srvs::SetBool::Request &req, std_srvs::SetBool::Response &res){
+    ROS_INFO("recived request");
+    if (req.data == true){
+        res.message = "start navigation mode";
+        res.success = true;
+        mode = true;
+        ROS_INFO("start navigation");
+    }else{
+        res.message = "start camera mode";
+        res.success = true;
+        mode = false;
+        ROS_INFO("start camera mode");
+    }
+    return res.success;
 }
 
 void Navigation::pose_callback(const geometry_msgs::PoseWithCovarianceStamped& msg){
     px = msg.pose.pose.position.x;
     py = msg.pose.pose.position.y;
     pz = msg.pose.pose.position.z;
-    // ROS_INFO("x = %f, y = %f, z = %f", px, py, pz);
 }
 
 void Navigation::list_callback(const std_msgs::UInt8MultiArray& msg){
@@ -66,28 +85,36 @@ void Navigation::list_callback(const std_msgs::UInt8MultiArray& msg){
         vec_array_msg.push_back(msg.data[i]);
         ROS_INFO("[%i]:%d", i, msg.data[i]);
     }
-    get_msg = true;
+}
+
+void Navigation::empty_goal_callback(){
+    empty_goal_pub = nh.advertise<actionlib_msgs::GoalID>("/move_base/cancel", 1);
+    actionlib_msgs::GoalID empty;
+    empty.id = "";
+    empty_goal_pub.publish(empty);
 }
 
 void Navigation::loop(){
-    static int spot_num = 0;
-    if (get_msg && spot_num <= vec_array_msg.size()){
-        double  gx = vec_spot[vec_array_msg[spot_num]].point.x,
-                gy = vec_spot[vec_array_msg[spot_num]].point.y,
-                gz = vec_spot[vec_array_msg[spot_num]].point.z,
-                d;
-        if (reach_goal){
-            stop_vel();
-            spot_num++;
+    if (mode){
+        static int spot_num = 0;
+        double d;
+        if (spot_num < vec_array_msg.size()){
+            double  gx = vec_spot[vec_array_msg[spot_num]].point.x,
+                    gy = vec_spot[vec_array_msg[spot_num]].point.y,
+                    gz = vec_spot[vec_array_msg[spot_num]].point.z;
+            send_goal(gx, gy, gz);
+            d = check_distance(gx, gy, px, py);
         }else if (spot_num == vec_array_msg.size()){
             send_goal(0.0, -0.7, -1.57);
-            check_distance(0.0, -0.7, px, py);
-        }else{
-            send_goal(gx, gy, gz);
-            check_distance(gx, gy, px, py);
+            d = check_distance(0.0, -0.7, px, py);
         }
+        if (d < 0.05){
+                spot_num++;
+                mode = false;
+                empty_goal_callback();
+            }
     }else{
-        ROS_INFO("waiting for message");
+        ROS_INFO("waiting for service");
     }
 }
 
@@ -146,25 +173,11 @@ void Navigation::send_goal(double x, double y, double e){
     ROS_INFO("send goal");
 }
 
-void Navigation::check_distance(double gx, double gy, double px, double py){
+double Navigation::check_distance(double gx, double gy, double px, double py){
     double distance;
     distance = sqrt(std::pow(px-gx, 2) + std::pow(py-gy, 2));
-    ROS_INFO("distance : %f", distance);
-    if (distance < 0.05){
-        reach_goal = true;
-    }
-}
-
-void Navigation::stop_vel(){
-    vel_pub = nh.advertise<geometry_msgs::Twist>("/cmd_vel", 1);
-    geometry_msgs::Twist vel;
-    vel.linear.x = 0;
-    vel.angular.z = 0;
-    vel_pub.publish(vel);
-    ROS_INFO("reached to goal");
-    reach_goal = false;
-    get_msg = true;
-    sleep(2);
+    ROS_INFO("distance:%f", distance);
+    return distance;
 }
 
 int main(int argc, char **argv) {
