@@ -56,6 +56,30 @@ Navigation::Navigation(){
     pose_sub = nh.subscribe("/mcl_pose", 1, &Navigation::pose_callback, this);
 }
 
+void Navigation::loop(){
+    if (mode){
+        static int spot_num = 0;
+        double  *gx = &vec_spot[vec_array_msg[spot_num]].point.x,
+                *gy = &vec_spot[vec_array_msg[spot_num]].point.y,
+                *gz = &vec_spot[vec_array_msg[spot_num]].point.z,
+                *ppx = &px,
+                *ppy = &py, 
+                dist;
+        send_goal(gx, gy, gz);
+        dist = check_distance(gx, gy, ppx, ppy);
+        if (dist < 0.05){
+            spot_num++;
+            mode = false;
+            empty_goal_callback();
+            if (spot_num == vec_array_msg.size()){
+                spot_num = 0;
+            }
+        }
+    }else{
+        ROS_INFO("waiting for service");
+    }
+}
+
 bool Navigation::mode_callback(std_srvs::SetBool::Request &req, std_srvs::SetBool::Response &res){
     ROS_INFO("recived request");
     if (req.data == true){
@@ -96,27 +120,6 @@ void Navigation::empty_goal_callback(){
     empty.id = "";
     empty_goal_pub.publish(empty);
     ROS_INFO("publish empty goal");
-}
-
-void Navigation::loop(){
-    if (mode){
-        static int spot_num = 0;
-        double  *gx = &vec_spot[vec_array_msg[spot_num]].point.x,
-                *gy = &vec_spot[vec_array_msg[spot_num]].point.y,
-                *gz = &vec_spot[vec_array_msg[spot_num]].point.z,
-                *ppx = &px,
-                *ppy = &py, 
-                dist;
-        send_goal(gx, gy, gz);
-        dist = check_distance(gx, gy, ppx, ppy);
-        if (dist < 0.05){
-                spot_num++;
-                mode = false;
-                empty_goal_callback();
-            }
-    }else{
-        ROS_INFO("waiting for service");
-    }
 }
 
 void Navigation::read_yaml(){
