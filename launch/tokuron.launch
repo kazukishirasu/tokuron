@@ -54,7 +54,7 @@
     <arg name="move_forward_only" value="$(arg move_forward_only)"/>
   </include>
 
-  <!-- <node pkg="tokuron" name="navigation" type="navigation" output="screen"/> -->
+  <node pkg="tokuron" name="navigation" type="navigation" output="screen"/>
   
   <!-- rviz -->
   <group if="$(arg open_rviz)">
